@@ -1,4 +1,4 @@
-package com.org.estimator.ai.dto.request;
+package com.org.estimator.ai.dto.response;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

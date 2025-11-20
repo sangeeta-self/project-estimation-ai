@@ -1,4 +1,4 @@
-package com.org.estimator.ai.dto.request;
+package com.org.estimator.ai.dto.response;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -10,9 +10,8 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ResourcePlanEntry {
+public class SourceInfo {
 
-    private Integer effortHours;
-    private Integer resourcesNeeded;
-    private Integer durationWeeks;
+    private String docId;
+    private Double similarity;
 }

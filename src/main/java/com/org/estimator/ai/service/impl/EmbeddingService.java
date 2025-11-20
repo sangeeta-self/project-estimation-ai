@@ -17,7 +17,7 @@ public class EmbeddingService {
 
     public EmbeddingService(AppConfig config) { this.config = config; }
 
-    // returns List<Double> embedding vector
+
     public List<Double> createEmbedding(String text) throws Exception {
         String apiKey = config.getOpenAiApiKey();
         if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OPENAI_API_KEY not set");

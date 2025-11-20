@@ -1,8 +1,11 @@
 package com.org.estimator.ai.service.impl;
 
+import org.springframework.stereotype.Service;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Service
 public class DocumentStore {
     public static class DocInfo {
         public String docId;

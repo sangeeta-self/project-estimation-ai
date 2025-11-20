@@ -3,10 +3,9 @@ package com.org.estimator.ai.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.org.estimator.ai.config.AppConfig;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import com.org.estimator.ai.service.VectorDbService;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.*;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -14,13 +13,14 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class VectorDbService {
+@Slf4j
+public class VectorDbServiceImpl implements VectorDbService {
 
     private final OkHttpClient http = new OkHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
     private final AppConfig config;
 
-    public VectorDbService(AppConfig config) { this.config = config; }
+    public VectorDbServiceImpl(AppConfig config) { this.config = config; }
 
     public void upsertVector(String id, List<Double> vector, String chunkText, String docId) throws Exception {
         String apiKey = config.getPineconeApiKey();

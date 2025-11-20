@@ -1,4 +1,4 @@
-package com.org.estimator.ai.dto.request;
+package com.org.estimator.ai.dto.response;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -10,9 +10,9 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class RiskEntry {
+public class ResourcePlanEntry {
 
-    private String risk;
-    private String impact;
-    private String mitigation;
+    private Integer effortHours;
+    private Integer resourcesNeeded;
+    private Integer durationWeeks;
 }
