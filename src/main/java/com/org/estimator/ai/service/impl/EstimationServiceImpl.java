@@ -42,7 +42,6 @@ public class EstimationServiceImpl implements EstimationService{
             throw new IllegalArgumentException("Either description or uploadDocId required");
         }
 
-        // 2) break into tasks
         String breakPrompt = langService.breakTasksPrompt(description);
         String breakResp = langService.callChat(breakPrompt);
         List<Map<String,Object>> tasks = parseListField(breakResp, "tasks");
@@ -50,19 +49,15 @@ public class EstimationServiceImpl implements EstimationService{
             tasks = List.of(Map.of("module","General","feature","General","task","Implement features","complexity","Medium","role","Backend"));
         }
 
-        // 3) create embeddings & upsert chunks (optional RAG)
-        // Create one large chunk for now (you can chunk and upsert each chunk)
         List<Double> emb = embeddingService.createEmbedding(description);
         String rdocId = req.getUploadDocId() == null ? "doc-inline-"+UUID.randomUUID().toString().substring(0,6) : req.getUploadDocId();
         vectorDbService.upsertVector(rdocId + "-chunk-0", emb, description, rdocId);
 
-        // 4) estimate effort
         String tasksJson = mapper.writeValueAsString(tasks);
         String estPrompt = langService.estimateEffortPrompt(tasksJson, req.getOptions() == null ? "" : mapper.writeValueAsString(req.getOptions()));
         String estResp = langService.callChat(estPrompt);
         List<Map<String,Object>> estimates = parseListField(estResp, "estimates");
         if (estimates.isEmpty()) {
-            // fallback: naive hours
             estimates = new ArrayList<>();
             for (Map<String,Object> t : tasks) {
                 Map<String,Object> e = new HashMap<>(t);
@@ -83,7 +78,6 @@ public class EstimationServiceImpl implements EstimationService{
             effortList.add(ee);
         }
 
-        // 5) resource plan & timeline
         String estimatesJson = mapper.writeValueAsString(estimates);
         String resourcePrompt = langService.resourcePlanPrompt(estimatesJson,
                 req.getConstraints() == null ? "" : String.join(", ", req.getConstraints()),
@@ -106,17 +100,17 @@ public class EstimationServiceImpl implements EstimationService{
 
         List<TimelineTask> timeline = new ArrayList<>();
         if (resourceMap.containsKey("timeline")) {
-            var tl = (List<Map<String,Object>>) resourceMap.get("timeline");
-            for (Map<String,Object> t : tl) {
-                TimelineTask tt = new TimelineTask();
-                tt.setId(asString(t.get("id")));
-                tt.setTask(asString(t.get("task")));
-                tt.setStart(asString(t.get("start")));
-                tt.setEnd(asString(t.get("end")));
+            var timeLine = (List<Map<String,Object>>) resourceMap.get("timeline");
+            for (Map<String,Object> t : timeLine) {
+                TimelineTask task = new TimelineTask();
+                task.setId(asString(t.get("id")));
+                task.setTask(asString(t.get("task")));
+                task.setStart(asString(t.get("start")));
+                task.setEnd(asString(t.get("end")));
                 Object depends = t.get("dependsOn");
-                if (depends instanceof List) tt.setDependsOn((List<String>) depends);
-                else tt.setDependsOn(List.of());
-                timeline.add(tt);
+                if (depends instanceof List) task.setDependsOn((List<String>) depends);
+                else task.setDependsOn(List.of());
+                timeline.add(task);
             }
         }
 
@@ -127,12 +121,12 @@ public class EstimationServiceImpl implements EstimationService{
         List<String> assumptions = (List<String>) arMap.getOrDefault("assumptions", List.of());
         List<Map<String,Object>> risksRaw = (List<Map<String,Object>>) arMap.getOrDefault("risks", List.of());
         List<RiskEntry> risks = new ArrayList<>();
-        for (Map<String,Object> r : risksRaw) {
-            RiskEntry rr = new RiskEntry();
-            rr.setRisk(asString(r.get("risk")));
-            rr.setImpact(asString(r.get("impact")));
-            rr.setMitigation(asString(r.get("mitigation")));
-            risks.add(rr);
+        for (Map<String,Object> risk : risksRaw) {
+            RiskEntry riskEntry = new RiskEntry();
+            riskEntry.setRisk(asString(risk.get("risk")));
+            riskEntry.setImpact(asString(risk.get("impact")));
+            riskEntry.setMitigation(asString(risk.get("mitigation")));
+            risks.add(riskEntry);
         }
 
         EstimateResponse resp = new EstimateResponse();
