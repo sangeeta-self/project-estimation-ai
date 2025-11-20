@@ -1,4 +1,17 @@
 package com.org.estimator.ai.dto.request;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class SourceInfo {
+
+    private String docId;
+    private Double similarity;
 }

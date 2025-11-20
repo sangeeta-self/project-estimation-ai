@@ -1,4 +1,4 @@
-package com.org.estimator.ai.service;
+package com.org.estimator.ai.service.impl;
 
 import org.springframework.stereotype.Service;
 
