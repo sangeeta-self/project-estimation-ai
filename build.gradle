@@ -32,7 +32,13 @@ dependencies {
 
     // PDF extraction
     implementation 'org.apache.pdfbox:pdfbox:2.0.29'
-    implementation 'org.apache.commons:commons-io:1.3.2'
+
+    implementation 'commons-io:commons-io:2.11.0'
+
+    // Apache POI for Word documents
+    implementation 'org.apache.poi:poi:5.2.3'           // for .doc
+    implementation 'org.apache.poi:poi-ooxml:5.2.3'     // for .docx
+    implementation 'org.apache.poi:poi-scratchpad:5.2.3'
 
     // Swagger / OpenAPI
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0'
@@ -56,4 +62,10 @@ tasks.named('test') {
 
 test {
     ignoreFailures = true
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'org.apache.poi:poi:5.2.3', 'org.apache.poi:poi-ooxml:5.2.3'
+    }
 }
