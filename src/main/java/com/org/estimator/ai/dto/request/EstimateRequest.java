@@ -14,12 +14,12 @@ import java.util.Map;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class EstimateRequest {
-    private String uploadDocId;
-    private String projectName;
     private String description;
+    private String uploadDocId;   // existing
+    private String filePath;      // NEW: optional full local path to file
+    private String projectName;
     private String deadline;
-    private List<String> techStack;
     private List<String> constraints;
-    private Map<String,Object> options;
+    private Map<String, Object> options;
 
 }

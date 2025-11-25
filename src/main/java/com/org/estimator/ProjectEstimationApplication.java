@@ -1,4 +1,4 @@
-package com.org.estimator.ai;
+package com.org.estimator;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

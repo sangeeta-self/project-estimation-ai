@@ -2,6 +2,7 @@ package com.org.estimator.ai.service.impl;
 
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -9,10 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DocumentStore {
     public static class DocInfo {
         public String docId;
-        public String filename;
-        public String status; // uploaded | processing | ready
+        public String fileName;
+        public String filePath;
         public String extractedSummary;
-        public String fullText;
+        public Instant uploadedAt;
     }
 
     private final Map<String,DocInfo> map = new ConcurrentHashMap<>();

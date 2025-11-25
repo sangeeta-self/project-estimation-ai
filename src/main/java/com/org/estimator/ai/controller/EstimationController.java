@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
-@RequestMapping("/api/estimate")
+@RequestMapping("/api/estimations")
 @Tag(name = "Estimation", description = "Generate AI-driven project estimates")
 public class EstimationController {
 
@@ -27,7 +27,7 @@ public class EstimationController {
     }
 
     @Operation(summary = "Generate unified project estimate")
-    @PostMapping(value = "get-estimation", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/get-estimate", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<EstimateResponse> estimate(@RequestBody EstimateRequest request) throws Exception {
         EstimateResponse resp = estimationService.estimate(request);
         return ResponseEntity.ok(resp);
