@@ -12,6 +12,7 @@ public class DocumentStore {
         public String filename;
         public String status; // uploaded | processing | ready
         public String extractedSummary;
+        public String fullText;
     }
 
     private final Map<String,DocInfo> map = new ConcurrentHashMap<>();

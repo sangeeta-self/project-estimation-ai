@@ -21,11 +21,18 @@ public class AppConfig {
     @Value("${storage.upload-dir:./uploads}")
     private String uploadDir;
 
+    @Value("${ocr.enabled:false}")
+    private boolean ocrEnabled;
+    @Value("${ocr.tessdata.path:}")
+    private String tessdataPath;
+
+
+
     public String getOpenAiApiKey() { return openAiApiKey; }
     public String getOpenAiChatModel() { return openAiChatModel; }
     public String getOpenAiEmbeddingModel() { return openAiEmbeddingModel; }
     public String getPineconeApiKey() { return pineconeApiKey; }
     public String getPineconeEnvironment() { return pineconeEnvironment; }
     public String getPineconeIndexName() { return pineconeIndexName; }
-    public String getUploadDir() { return uploadDir; }
+
 }

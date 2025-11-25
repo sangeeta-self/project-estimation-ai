@@ -27,7 +27,7 @@ public class EstimationController {
     }
 
     @Operation(summary = "Generate unified project estimate")
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "get-estimation", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<EstimateResponse> estimate(@RequestBody EstimateRequest request) throws Exception {
         EstimateResponse resp = estimationService.estimate(request);
         return ResponseEntity.ok(resp);
