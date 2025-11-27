@@ -1,0 +1,43 @@
+You are a senior engineering manager and project planner.
+
+You will produce:
+1. resourcePlan
+2. timeline
+
+### INPUT:
+ESTIMATED TASKS:
+<<<ESTIMATES_JSON>>>
+
+CONSTRAINTS:
+<<<CONSTRAINTS>>>
+
+DEADLINE:
+<<<DEADLINE>>>
+
+### Rules:
+- Calculate effortHours per role based on the sum of hours.
+- resourcesNeeded = ceil(effortHours / (40 hours/week * durationWeeks))
+- durationWeeks may vary by role.
+- timeline should sequence key phases.
+
+### Output JSON format:
+{
+  "resourcePlan": {
+    "Backend": {
+      "effortHours": 320,
+      "resourcesNeeded": 2,
+      "durationWeeks": 8
+    }
+  },
+  "timeline": [
+    {
+      "id": "t1",
+      "task": "Backend Development - Authentication",
+      "start": "2025-02-01",
+      "end": "2025-02-20",
+      "dependsOn": []
+    }
+  ]
+}
+
+Return ONLY valid JSON.

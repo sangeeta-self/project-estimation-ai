@@ -2,99 +2,95 @@ package com.org.estimator.ai.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.org.estimator.ai.config.AppConfig;
+import com.org.estimator.ai.config.OpenAIProperties;
 import com.org.estimator.ai.service.LangService;
-import okhttp3.*;
-import org.springframework.core.io.ClassPathResource;
+import com.org.estimator.ai.service.lang.PromptLoaderService;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
 public class LangServiceImpl implements LangService {
 
-    private final AppConfig config;
-    private final OkHttpClient http = new OkHttpClient();
+    private final PromptLoaderService prompts;
+    private final WebClient webClient;
+    private final OpenAIProperties props;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private String breakTasksPrompt;
-    private String estimateEffortPrompt;
-    private String resourcePlanPrompt;
-    private String assumptionsPrompt;
-
-    public LangServiceImpl(AppConfig config) {
-        this.config = config;
-        loadPrompts();
-    }
-
-    private void loadPrompts() {
-        try {
-            breakTasksPrompt = new String(new ClassPathResource("prompt-templates/break_tasks.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            estimateEffortPrompt = new String(new ClassPathResource("prompt-templates/estimate_effort.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            resourcePlanPrompt = new String(new ClassPathResource("prompt-templates/resource_plan.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assumptionsPrompt = new String(new ClassPathResource("prompt-templates/assumptions_risks.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load prompts", e);
+    public LangServiceImpl(PromptLoaderService prompts, OpenAIProperties props) {
+        this.prompts = prompts;
+        this.props = props;
+        if (props.getApiKey() == null || props.getApiKey().isBlank()) {
+            throw new IllegalStateException("OpenAI API key not set (openai.api.key)");
         }
+        this.webClient = WebClient.builder()
+                .baseUrl(props.getBaseUrl())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.getApiKey())
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .build();
+
     }
 
     @Override
-    public String breakTasksPrompt(String requirements) {
-        return breakTasksPrompt.replace("{requirements}", escape(requirements));
+    public String breakTasksPrompt(String description) {
+        return prompts.render("tasks_division.prompt", Map.of("DESCRIPTION", description == null ? "" : description));
     }
 
     @Override
-    public String estimateEffortPrompt(String tasksJson, String context) {
-        return estimateEffortPrompt.replace("{tasks}", escape(tasksJson)).replace("{context}", escape(context == null ? "" : context));
+    public String estimateEffortPrompt(String tasksJson, String optionsJson) {
+        return prompts.render("effort_estimate.prompt", Map.of("TASKS_JSON", tasksJson == null ? "" : tasksJson,
+                "OPTIONS", optionsJson == null ? "" : optionsJson));
     }
 
     @Override
     public String resourcePlanPrompt(String estimatesJson, String constraints, String deadline) {
-        return resourcePlanPrompt.replace("{estimates}", escape(estimatesJson))
-                .replace("{constraints}", escape(constraints == null ? "" : constraints))
-                .replace("{deadline}", escape(deadline == null ? "" : deadline));
+        return prompts.render("resource_plan.prompt", Map.of("ESTIMATES_JSON", estimatesJson == null ? "" : estimatesJson,
+                "CONSTRAINTS", constraints == null ? "" : constraints,
+                "DEADLINE", deadline == null ? "" : deadline));
     }
 
     @Override
     public String assumptionsPrompt(String summary) {
-        return assumptionsPrompt.replace("{summary}", escape(summary));
-    }
-
-    private String escape(String s) {
-        return s == null ? "" : s.replace("`","").replace("$","");
+        return prompts.render("assumptions_risks.prompt", Map.of("PROJECT_SUMMARY", summary == null ? "" : summary));
     }
 
     @Override
     public String callChat(String prompt) throws Exception {
-        String url = "https://api.openai.com/v1/chat/completions";
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("model", config.getOpenAiChatModel());
-        var messages = List.of(
-                Map.of("role","system","content","You are a senior project estimator. Return strict JSON only."),
-                Map.of("role","user","content", prompt)
-        );
-        payload.put("messages", messages);
-        payload.put("temperature", 0.2);
+        System.out.println("******************************");
+        System.out.println("API_key "+props.getApiKey());
+        System.out.println("Base Url "+props.getBaseUrl());
 
-        RequestBody body = RequestBody.create(mapper.writeValueAsString(payload), MediaType.get("application/json"));
-        Request req = new Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer " + config.getOpenAiApiKey())
-                .post(body)
-                .build();
+        Map<String,Object> body = new HashMap<>();
+        body.put("model", props.getModelChat() == null ? "gpt-4o-mini" : props.getModelChat());
+        body.put("messages", new Object[] { Map.of("role", "user", "content", prompt) });
+        body.put("temperature", props.getTemperature() == null ? 0.2 : props.getTemperature());
 
-        try (Response resp = http.newCall(req).execute()) {
-            if (!resp.isSuccessful()) throw new RuntimeException("OpenAI chat failed: " + resp.code() + " " + resp.body().string());
-            JsonNode root = mapper.readTree(resp.body().string());
-            JsonNode choices = root.get("choices");
-            if (choices != null && choices.size() > 0) {
-                return choices.get(0).get("message").get("content").asText();
-            }
-            return "";
+        Mono<String> resp = webClient.post()
+                .uri("/chat/completions")
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(60));
+
+        String json = resp.block();
+        if (json == null) throw new RuntimeException("Empty response from OpenAI");
+        JsonNode root = mapper.readTree(json);
+        JsonNode choices = root.path("choices");
+        if (choices.isArray() && choices.size() > 0) {
+            JsonNode message = choices.get(0).path("message");
+            String content = message.path("content").asText(null);
+            if (content != null) return content.trim();
         }
+        String text = root.path("text").asText(null);
+        if (text != null) return text.trim();
+        throw new RuntimeException("No assistant content returned from OpenAI: " + json);
     }
 
 }
