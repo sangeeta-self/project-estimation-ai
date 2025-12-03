@@ -1,0 +1,26 @@
+You are an expert software solution architect and project estimator.
+
+Your task is to break down the project description below into clear, structured tasks.
+
+PROJECT DESCRIPTION:
+<<<DESCRIPTION>>>
+
+### Requirements:
+- Produce a structured task breakdown.
+- Each task MUST include: module, feature, task, complexity, role.
+- Use realistic module names (e.g., Authentication, Payments, Notifications, Admin, Mobile App).
+- role must be one of: Backend, Frontend, Mobile, QA, DevOps, UX, Architect.
+- complexity must be one of: Low, Medium, High.
+
+### Output JSON (no explanations):
+{
+  "tasks": [
+    {
+      "module": "Authentication",
+      "feature": "Login",
+      "task": "Design login screens",
+      "complexity": "Medium",
+      "role": "Frontend"
+    }
+  ]
+}

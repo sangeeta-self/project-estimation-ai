@@ -1,100 +1,118 @@
 package com.org.estimator.ai.service.impl;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.org.estimator.ai.config.AppConfig;
+import com.openai.client.OpenAIClient;
+import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionMessageParam;
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
+import com.org.estimator.ai.config.OpenAIPropertiesConfig;
 import com.org.estimator.ai.service.LangService;
-import okhttp3.*;
-import org.springframework.core.io.ClassPathResource;
+import com.org.estimator.ai.service.lang.PromptLoaderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class LangServiceImpl implements LangService {
 
-    private final AppConfig config;
-    private final OkHttpClient http = new OkHttpClient();
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final PromptLoaderService promptLoader;
+    private final OpenAIPropertiesConfig props;
+    private final OpenAIClient client;
 
-    private String breakTasksPrompt;
-    private String estimateEffortPrompt;
-    private String resourcePlanPrompt;
-    private String assumptionsPrompt;
+    public LangServiceImpl(PromptLoaderService promptLoader, OpenAIPropertiesConfig props) {
+        this.promptLoader = promptLoader;
+        this.props = props;
 
-    public LangServiceImpl(AppConfig config) {
-        this.config = config;
-        loadPrompts();
-    }
-
-    private void loadPrompts() {
-        try {
-            breakTasksPrompt = new String(new ClassPathResource("prompt-templates/break_tasks.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            estimateEffortPrompt = new String(new ClassPathResource("prompt-templates/estimate_effort.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            resourcePlanPrompt = new String(new ClassPathResource("prompt-templates/resource_plan.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assumptionsPrompt = new String(new ClassPathResource("prompt-templates/assumptions_risks.prompt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load prompts", e);
+        String apiKey = props.getApiKey();
+        if (apiKey == null || apiKey.isBlank()) apiKey = System.getenv("OPENAI_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("OpenAI API key not provided. Set openai.api-key or OPENAI_API_KEY.");
         }
+
+        this.client = OpenAIOkHttpClient.builder()
+                .apiKey(apiKey)
+                .build();
+        log.info("LangServiceImpl initialized (model-chat={}, baseUrl={})",
+                props.getModelChat(), props.getBaseUrl());
+    }
+
+
+
+    @Override
+    public String breakTasksPrompt(String description) {
+        return promptLoader.render("tasks_division.prompt", Map.of("DESCRIPTION", description == null ? "" : description));
     }
 
     @Override
-    public String breakTasksPrompt(String requirements) {
-        return breakTasksPrompt.replace("{requirements}", escape(requirements));
-    }
-
-    @Override
-    public String estimateEffortPrompt(String tasksJson, String context) {
-        return estimateEffortPrompt.replace("{tasks}", escape(tasksJson)).replace("{context}", escape(context == null ? "" : context));
+    public String estimateEffortPrompt(String tasksJson, String optionsJson) {
+        return promptLoader.render("effort_estimate.prompt", Map.of("TASKS_JSON", tasksJson == null ? "" : tasksJson,
+                "OPTIONS", optionsJson == null ? "" : optionsJson));
     }
 
     @Override
     public String resourcePlanPrompt(String estimatesJson, String constraints, String deadline) {
-        return resourcePlanPrompt.replace("{estimates}", escape(estimatesJson))
-                .replace("{constraints}", escape(constraints == null ? "" : constraints))
-                .replace("{deadline}", escape(deadline == null ? "" : deadline));
+        return promptLoader.render("resource_plan.prompt", Map.of("ESTIMATES_JSON", estimatesJson == null ? "" : estimatesJson,
+                "CONSTRAINTS", constraints == null ? "" : constraints,
+                "DEADLINE", deadline == null ? "" : deadline));
     }
 
     @Override
     public String assumptionsPrompt(String summary) {
-        return assumptionsPrompt.replace("{summary}", escape(summary));
+        return promptLoader.render("assumptions_risks.prompt", Map.of("PROJECT_SUMMARY", summary == null ? "" : summary));
     }
 
-    private String escape(String s) {
-        return s == null ? "" : s.replace("`","").replace("$","");
-    }
 
     @Override
-    public String callChat(String prompt) throws Exception {
-        String url = "https://api.openai.com/v1/chat/completions";
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("model", config.getOpenAiChatModel());
-        var messages = List.of(
-                Map.of("role","system","content","You are a senior project estimator. Return strict JSON only."),
-                Map.of("role","user","content", prompt)
-        );
-        payload.put("messages", messages);
-        payload.put("temperature", 0.2);
-
-        RequestBody body = RequestBody.create(mapper.writeValueAsString(payload), MediaType.get("application/json"));
-        Request req = new Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer " + config.getOpenAiApiKey())
-                .post(body)
-                .build();
-
-        try (Response resp = http.newCall(req).execute()) {
-            if (!resp.isSuccessful()) throw new RuntimeException("OpenAI chat failed: " + resp.code() + " " + resp.body().string());
-            JsonNode root = mapper.readTree(resp.body().string());
-            JsonNode choices = root.get("choices");
-            if (choices != null && choices.size() > 0) {
-                return choices.get(0).get("message").get("content").asText();
-            }
+    public String callChat(String prompt) {
+        if (prompt == null || prompt.isBlank()) {
             return "";
         }
+        int maxRetries = 5;
+        long backoffMs = 1000;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                // Build user message
+                ChatCompletionUserMessageParam userContent = ChatCompletionUserMessageParam.builder()
+                        .content(prompt)
+                        .build();
+
+                ChatCompletionMessageParam userMessage = ChatCompletionMessageParam.ofUser(userContent);
+
+                // Build request
+                ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                        .model(props.getModelChat())
+                        .messages(List.of(userMessage))
+                        .maxTokens(1024)
+                        .build();
+
+                // Call API
+                ChatCompletion response = client.chat().completions().create(params);
+                String content = response.choices().get(0).message().content().orElse("");
+                response = null;
+                return content;
+
+            } catch (com.openai.errors.RateLimitException e) {
+                    log.warn("Rate limit hit (attempt {} of {}), retrying in {} ms...", attempt, maxRetries, backoffMs);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return "Error: Interrupted during retry";
+                    }
+                    backoffMs *= 2;
+            } catch (Exception e) {
+                    log.error("Error calling OpenAI chat API", e);
+                    return "Error: " + e.getMessage();
+            }
+
+        }
+        return "Error: Failed after " + maxRetries + " attempts due to rate limiting.";
     }
+
 
 }

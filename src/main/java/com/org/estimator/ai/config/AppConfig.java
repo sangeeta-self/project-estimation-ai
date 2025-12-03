@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AppConfig {
 
-    @Value("${openai.api-key:}")
+    @Value("$x{openai.api-key:}")
     private String openAiApiKey;
     @Value("${openai.model-chat:gpt-4o-mini}")
     private String openAiChatModel;
@@ -18,8 +18,7 @@ public class AppConfig {
     private String pineconeEnvironment;
     @Value("${pinecone.index-name:project-estimator}")
     private String pineconeIndexName;
-    @Value("${storage.upload-dir:./uploads}")
-    private String uploadDir;
+
 
     @Value("${ocr.enabled:false}")
     private boolean ocrEnabled;

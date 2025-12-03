@@ -2,12 +2,16 @@ package com.org.estimator.ai.service.impl;
 
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.org.estimator.ai.config.AppConfig;
 import com.org.estimator.ai.service.VectorDbService;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,46 +20,52 @@ import java.util.Map;
 @Slf4j
 public class VectorDbServiceImpl implements VectorDbService {
 
-    private final OkHttpClient http = new OkHttpClient();
+    private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final AppConfig config;
+    private final String indexName;
+    private final String pineconeBase;
 
-    public VectorDbServiceImpl(AppConfig config) { this.config = config; }
-
-    public void upsertVector(String id, List<Double> vector, String chunkText, String docId) throws Exception {
-        String apiKey = config.getPineconeApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
-            System.out.println("Pinecone not configured; skipping upsert for " + id);
-            return;
+    public VectorDbServiceImpl(@Value("${pinecone.api.key}") String pineconeApiKey,
+                               @Value("${pinecone.environment}") String pineconeEnv,
+                               @Value("${pinecone.index.name}") String indexName) {
+        this.indexName = indexName;
+        if (pineconeApiKey == null || pineconeApiKey.isBlank()) {
+            throw new IllegalStateException("Pinecone API key not set");
         }
-        String env = config.getPineconeEnvironment();
-        String index = config.getPineconeIndexName();
-
-        String url = String.format("https://%s-%s.svc.%s.pinecone.io/vectors/upsert", index, index, env);
-
-        Map<String,Object> payload = new HashMap<>();
-        Map<String,Object> vec = new HashMap<>();
-        vec.put("id", id);
-        vec.put("values", vector);
-        Map<String,String> metadata = new HashMap<>();
-        metadata.put("docId", docId);
-        metadata.put("text", chunkText.length() > 200 ? chunkText.substring(0,200) : chunkText);
-        vec.put("metadata", metadata);
-        payload.put("vectors", List.of(vec));
-
-        RequestBody body = RequestBody.create(mapper.writeValueAsString(payload), MediaType.get("application/json"));
-        Request req = new Request.Builder()
-                .url(url)
-                .addHeader("Api-Key", apiKey)
-                .post(body)
+        // Pinecone REST base url: https://controller.<env>.pinecone.io or index url: https://<index>-<project>.svc.<env>.pinecone.io
+        // We'll call the upsert endpoint using index-specific URL pattern:
+        this.pineconeBase = String.format("https://%s-%s.svc.%s.pinecone.io", indexName, "default", pineconeEnv);
+        this.webClient = WebClient.builder()
+                .baseUrl(pineconeBase)
+                .defaultHeader("Api-Key", pineconeApiKey)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
-
-        try (Response resp = http.newCall(req).execute()) {
-            if (!resp.isSuccessful()) {
-                System.err.println("Pinecone upsert failed: " + resp.code() + " " + (resp.body() == null ? "" : resp.body().string()));
-            } else {
-                System.out.println("Upsert succeeded for " + id);
-            }
-        }
     }
+
+    @Override
+    public void upsertBatch(List<Map<String, Object>> items, String namespace) throws Exception {
+        // items: list of { id, values (List<Double>), metadata(Map) }
+        Map<String,Object> body = Map.of("vectors", items);
+        if (namespace != null && !namespace.isBlank()) {
+            body = Map.of("vectors", items, "namespace", namespace);
+        }
+        Mono<String> resp = webClient.post()
+                .uri("/vectors/upsert")
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(30));
+        String json = resp.block();
+        if (json == null) throw new RuntimeException("Empty upsert response from Pinecone");
+        // optional: parse response for errors
+    }
+
+
+
+    @Override
+    public void upsertVector(String id, List<Double> vector, Map<String, Object> metadata, String namespace) throws Exception {
+        Map<String,Object> vec = Map.of("id", id, "values", vector, "metadata", metadata);
+        upsertBatch(List.of(vec), namespace);
+    }
+
 }
